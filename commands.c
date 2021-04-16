@@ -2,6 +2,12 @@
 //********************************************
 #include "commands.h"
 //********************************************
+
+// Name Space and local Constatns
+using namespace std;
+static string last_cwd = getcwd();
+//********************************************
+
 // function name: ExeCmd
 // Description: interperts and executes built-in commands
 // Parameters: pointer to jobs, command string
@@ -31,17 +37,35 @@ int ExeCmd(void* jobs, char* lineSize, char* cmdString)
 // ARE IN THIS CHAIN OF IF COMMANDS. PLEASE ADD
 // MORE IF STATEMENTS AS REQUIRED
 /*************************************************/
-	if (!strcmp(cmd, "cd") ) 
+	if (!strcmp(cmd, "cd"))
 	{
-		
-	} 
-	
-	/*************************************************/
-	else if (!strcmp(cmd, "pwd")) 
-	{
-		
+		if (num_arg > 2)
+		{
+			illegal_cmd = TRUE;
+		}
+
+		else
+		{
+			if (!strcmp(args[1], "-"))
+			{
+				chdir(last_cwd);
+			}
+
+			else (0 != chdir(args[1]))
+			{
+				cerr << "smash error: > " << args[1] << " – No such file or directory";
+			}
+		}
+
+		last_cwd = getcwd();
 	}
-	
+
+	/*************************************************/
+	else if (!strcmp(cmd, "pwd"))
+	{
+		char* curr_location = getcwd();
+		cout << loc << endl;
+	}
 	/*************************************************/
 	else if (!strcmp(cmd, "mkdir"))
 	{

@@ -2,12 +2,16 @@
 //********************************************
 #include "commands.h"
 #include <list>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/limits.h>
 //********************************************
 // Name Space and local Constatns
 using namespace std;
-static string last_cwd = getcwd();
+char* last_cwd = NULL;
+char new_last_cwd[PATH_MAX];
 list<char*> hist;
-enum {MAX_HIST_NUM = 50};
+enum {MAX_HIST_NUM = 50, CHUNK = 100};
 
 //********************************************
 // function name: ExeCmd
@@ -50,23 +54,41 @@ int ExeCmd(void* jobs, char* lineSize, char* cmdString)
 /*************************************************/
 	if (!strcmp(cmd, "cd") ) 
 	{				
-		last_cwd = getcwd();
-
 		if (num_arg > 2)
 		{
 			illegal_cmd = TRUE;
 		}
 		
 		else 
-		{
-			if (!strcmp(args[1], "-"))
+		{ 
+			if (getcwd(new_last_cwd, PATH_MAX) == NULL) // save current location
 			{
-				chdir(last_cwd);
+				perror("smash error");
 			}
-			
-			else (0 != chdir(args[1]))
+
+			else
 			{
-				cerr << "smash error: > " << args[1] << " – No such file or directory";
+				if (!strcmp(args[1], "-")) // if ask to go to last cwd
+				{
+					if (last_cwd != NULL) // if this is not the first request (we've been to another place)
+					{
+						chdir(last_cwd);							 // change to last location
+						last_cwd = new_last_cwd;					 // update last cwd
+					}
+				}
+
+				else 
+				{
+					if (0 != chdir(args[1]))
+					{
+						perror("smash error");
+					}
+
+					else
+					{
+						last_cwd = new_last_cwd;					 // update last cwd
+					}
+				}
 			}
 		}
 	} 
@@ -79,16 +101,18 @@ int ExeCmd(void* jobs, char* lineSize, char* cmdString)
 			illegal_cmd = TRUE;
 		}
 		else
-			cout << getcwd() << endl;
+		{
+			char wd[PATH_MAX];
+			if (getcwd(wd, PATH_MAX) == NULL)
+			{
+				perror("smash error");
+			}
+			else
+				cout << wd << endl;
+		}
 	}
 	
 	/*************************************************/
-	else if (!strcmp(cmd, "mkdir"))
-	{
- 		
-	}
-	/*************************************************/
-	
 	else if (!strcmp(cmd, "jobs")) 
 	{
  		
@@ -129,6 +153,102 @@ int ExeCmd(void* jobs, char* lineSize, char* cmdString)
 			for (auto& iter : hist) cout << iter << endl;
 	} 
 	/*************************************************/
+	else if (!strcmp(cmd, "diff"))
+	{
+		if (num_arg != 3)
+		{
+			illegal_cmd = TRUE;
+		}
+
+		else
+		{// should we add cwd?
+			int fd1 = open(args[1], O_APPEND);
+			int fd2 = open(args[2], O_APPEND);
+			if (fd1 < 0 || fd2 < 0)
+			{
+				perror("smash error"); //  bad path/s
+				return 1;
+			}
+
+			else // good paths
+			{
+				char text2[CHUNK];
+				char text1[CHUNK];
+				int bytes1 = 1;
+				int bytes2 = 1;
+
+				while (bytes1 > 0 && bytes2 > 0)
+				{
+					bytes1 = read(fd1, text1, CHUNK);
+					bytes2 = read(fd2, text2, CHUNK);
+					if (bytes1 < 0 || bytes2 < 0)
+					{
+						perror("smash error"); //  bad reads
+						return 1;
+					}
+
+					if ((string)text1 != (string)text2)
+					{
+						cout << "1" << endl;
+						return 0;
+					}
+
+				}
+
+				cout << "0" << endl;
+			}
+		}
+
+	}
+	/*************************************************/
+	else if (!strcmp(cmd, "cp"))
+	{
+		if (num_arg != 3)
+		{
+			illegal_cmd = TRUE;
+		}
+
+		else
+		{
+			int src_fd = open(args[1], O_APPEND);
+			if (src_fd < 0)
+			{
+				perror("smash error"); // src file does not exist
+				return 1;
+			}
+
+			int dst_fd = creat(args[2], S_IRWXU | S_IRWXG);
+			if (dst_fd < 0)
+			{
+				perror("smash error"); // dst cannot be opened
+				return 1;
+			}
+
+			char src_text[CHUNK];
+			int rd_bytes = 1;
+			int wr_bytes;
+
+			while (rd_bytes > 0)
+			{
+				rd_bytes = read(src_fd, src_text, CHUNK);
+				if (rd_bytes < 0)
+				{
+					perror("smash error"); //  bad read
+					return 1;
+				}
+
+				wr_bytes = write(dst_fd, src_text, rd_bytes);
+				if (wr_bytes < 0 || wr_bytes != rd_bytes)
+				{
+					perror("smash error"); // bad write
+					return 1;
+				}
+			}
+
+			return 0;
+		}
+	}
+	/*************************************************/
 	else // external command
 	{
  		ExeExternal(args, cmdString);
@@ -155,19 +275,14 @@ void ExeExternal(char *args[MAX_ARG], char* cmdString)
 	{
     		case -1: 
 					// Add your code here (error)
-					
-					/* 
-					your code
-					*/
+					perror("smash error");
         	case 0 :
                 	// Child Process
                		setpgrp();
 					
 			        // Add your code here (execute an external command)
 					
-					/* 
-					your code
-					*/
+					execv(cmdString, args);
 			
 			default:
                 	// Add your code here

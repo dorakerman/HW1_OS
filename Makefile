@@ -8,7 +8,7 @@ RM = rm -f
 smash: $(OBJS)
 	$(CCLINK) -o smash $(OBJS)
 # Creating the object files
-commands.o: commands.c commands.h
+commands.o: commands.cpp commands.h
 smash.o: smash.c commands.h
 signals.o: signals.c signals.h
 # Cleaning old files before new make
